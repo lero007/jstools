@@ -23,6 +23,8 @@
 		var setCommentFormat = '	/**\r\n	 * {0}を設定する。<BR>\r\n	 * @param {1} {2}\r\n	 */';
 		var setFormat = '	public void set{0}({1} {2}) {\r\n		this.{3} = {4};\r\n	}\r\n';
 		$(function () {
+			loadCommentLang();
+			
 			$('#parseBtn').click(function () {
 				doParseFiled();
 			});
