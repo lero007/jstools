@@ -1,0 +1,357 @@
+
+<html>
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" /> 
+	<script src="https://cdn.staticfile.org/jquery/1.10.2/jquery.min.js"></script>
+
+	<style>
+		* {
+			font-family: '微软雅黑';
+		}
+
+		label {
+			font-size: 15px;
+			margin-right: 15px;
+		}
+	</style>
+	<script type="application/javascript">
+		var timeMap = new Map();
+		var filedFormat = '	/** {0} */\r\n	private {1} {2};\r\n';
+		var getCommentFormat = '	/**\r\n	 * {0}を取得する。<BR>\r\n	 * @return {1}\r\n	 */';
+		var getFormat = '	public {0} get{1}() {\r\n		return {2};\r\n	}\r\n';
+		var setCommentFormat = '	/**\r\n	 * {0}を設定する。<BR>\r\n	 * @param {1} {2}\r\n	 */';
+		var setFormat = '	public void set{0}({1} {2}) {\r\n		this.{3} = {4};\r\n	}\r\n';
+		$(function () {
+			$('#parseBtn').click(function () {
+				doParseFiled();
+			});
+
+			$('#tryBtn').click(function () {
+				$('#parseArea').val('update_date,更新日期,String\nupdate_time,更新时间,String');
+				$('#startBtn').click();
+			});
+
+			$('#addBtn').click(function () {
+				addFiled();
+			});
+
+			$('#cleanInputBtn').click(function () {
+				$('#parseArea').val('');
+				while ($('.filedSet').length > 1) {
+					$('.filedSet').first().remove();
+				}
+				$('.filedSet').find('input').val('');
+				$('.filedSet').find('.type').val('String');
+				$('#outputArea').val('');
+				$('#consoleArea').val('');
+				$('#toCamelCkb').prop("checked", false);
+				$('#fWordDnCkb').prop("checked", false);
+				$('#commentLang').val('jp');
+			});
+
+			$('#cleanOutputBtn').click(function () {
+				$('#outputArea').val('');
+				$('#consoleArea').val('');
+			});
+
+			$('.removeBtn').click(function () {
+				removeFiled($(this));
+			});
+
+			$('#commentLang').change(function(){
+				loadCommentLang();
+			});
+
+			$('#startBtn').click(function () {
+				// $('#consoleArea').val('');
+				startLog("生成");
+				try {
+					doParseFiled();
+					var $outputArea = $('#outputArea');
+					var filedList = '';
+					var getSetList = '';
+					$('.filedSet').each(function () {
+						var filed = $(this).find('.filed').val();
+						if (filed) {
+							var name = $(this).find('.name').val();
+							var type = $(this).find('.type').val();
+							infoLog($.sprintf('正在处理 {0}:{1}', filed, name));
+							filed = toCamel(filed);
+							filedList += $.sprintf(filedFormat, name, type, filed) + '\r\n';
+							var filedFU = filed.substring(0, 1).toUpperCase() + filed.substring(1);
+							getSetList += $.sprintf(getCommentFormat, name, name) + '\r\n';
+							getSetList += $.sprintf(getFormat, type, filedFU, filed) + '\r\n';
+							getSetList += $.sprintf(setCommentFormat, name, filed, name) + '\r\n';
+							getSetList += $.sprintf(setFormat, filedFU, type, filed, filed, filed) + '\r\n';
+						}
+					});
+					$outputArea.val(filedList + getSetList);
+				} catch (e) {
+					errorLog('Something wrong with your pgm.');
+					console.log(e);
+				}
+				endLog("生成");
+			});
+		});
+
+		function loadCommentLang() {
+			var cmLg = $('#commentLang').val();
+			if (cmLg === 'jp') {
+				filedFormat = '	/** {0} */\r\n	private {1} {2};\r\n';
+				getCommentFormat = '	/**\r\n	 * {0}を取得する。<BR>\r\n	 * @return {1}\r\n	 */';
+				getFormat = '	public {0} get{1}() {\r\n		return {2};\r\n	}\r\n';
+				setCommentFormat = '	/**\r\n	 * {0}を設定する。<BR>\r\n	 * @param {1} {2}\r\n	 */';
+				setFormat = '	public void set{0}({1} {2}) {\r\n		this.{3} = {4};\r\n	}\r\n';
+			} else if (cmLg === 'zh') {
+				filedFormat = '	/** {0} */\r\n	private {1} {2};\r\n';
+				getCommentFormat = '	/**\r\n	 * 获取{0}。<BR>\r\n	 * @return {1}\r\n	 */';
+				getFormat = '	public {0} get{1}() {\r\n		return {2};\r\n	}\r\n';
+				setCommentFormat = '	/**\r\n	 * 设定{0}。<BR>\r\n	 * @param {1} {2}\r\n	 */';
+				setFormat = '	public void set{0}({1} {2}) {\r\n		this.{3} = {4};\r\n	}\r\n';
+			} else if (cmLg === 'en') {
+				filedFormat = '	/** {0} */\r\n	private {1} {2};\r\n';
+				getCommentFormat = '	/**\r\n	 * Get {0}。<BR>\r\n	 * @return {1}\r\n	 */';
+				getFormat = '	public {0} get{1}() {\r\n		return {2};\r\n	}\r\n';
+				setCommentFormat = '	/**\r\n	 * Set {0}。<BR>\r\n	 * @param {1} {2}\r\n	 */';
+				setFormat = '	public void set{0}({1} {2}) {\r\n		this.{3} = {4};\r\n	}\r\n';
+			}
+		}
+
+		function doParseFiled() {
+			var parseVal = $('#parseArea').val().trim();
+			if (parseVal) {
+				var arr = parseVal.split('\n');
+				while (arr.length > $('.filedSet').length) {
+					addFiled();
+				}
+				var filedSetList = $('.filedSet');
+				$(arr).each(function (key, val) {
+					var subArr = new Array();
+					if (val.indexOf(',') > 0) {
+						subArr = val.split(',');
+					} else if (val.indexOf('\t') > 0) {
+						subArr = val.split('\t');
+					}
+					var filedVal = subArr[0];
+					var nameVal = subArr.length > 1 ? subArr[1] : subArr[0];
+					var typeVal = subArr.length > 2 ? subArr[2] : 'String';
+					$(filedSetList[key]).find('.filed').val(filedVal);
+					$(filedSetList[key]).find('.name').val(nameVal);
+					$(filedSetList[key]).find('.type').val(typeVal);
+				});
+			}
+		}
+
+		function removeFiled($target) {
+			if ($('.filedSet').length == 1) {
+				alert("最后一个不能删除！");
+			} else {
+				$target.parent().remove();
+			}
+		}
+
+		function toCamel(filed) {
+			var toCamelFlg = $('#toCamelCkb').prop("checked");
+			var fWordDnFlg = $('#fWordDnCkb').prop("checked");
+			if (toCamelFlg) {
+				if (filed.indexOf("_") > 0) {
+					var filedArr = filed.toLowerCase().split("_");
+					var result = "";
+					$(filedArr).each(function (key, val) {
+						if (result.length > 0) {
+							val = val.substring(0, 1).toUpperCase() + val.substring(1);
+						}
+						result = result + val;
+					});
+					return result;
+				} else {
+					return filed.toLowerCase();
+				}
+			}
+			if (fWordDnFlg) {
+				filed = filed.substring(0, 1).toLowerCase() + filed.substring(1);
+			}
+			return filed;
+		}
+
+		function addFiled() {
+			var $tmp = $('.filedSet:first').clone();
+			$tmp.find('input').val('');
+			$tmp.find('select').val('String');
+			$tmp.find('.removeBtn').click(function () {
+				removeFiled($(this));
+			});
+			$('#filedContents').append($tmp);
+		}
+
+		function errorLog(msg) {
+			log('ERROR', msg);
+			$('#consoleArea').focus();
+		}
+
+		function warnLog(msg) {
+			log('WARN ', msg);
+		}
+
+		function startLog(msg) {
+			startTime(msg);
+			infoLog($.sprintf('{0}处理开始！', msg));
+		}
+
+		function endLog(msg) {
+			var time = endTime(msg);
+			infoLog($.sprintf('{0}处理结束！共耗时：{1}ms', msg, time));
+		}
+
+		function infoLog(msg) {
+			log('INFO ', msg);
+		}
+
+		function debugLog(msg) {
+			log('DEBUG', msg);
+		}
+
+		function log(level, msg) {
+			var date = (new Date()).Format("yyyy-MM-dd HH:mm:ss.S");
+			msg = $.sprintf('[{0}] [{1}] {2}\r\n', level, date, msg);
+			var logContent = $('#consoleArea').val();
+			if (logContent) {
+				msg = logContent + msg;
+			}
+			$('#consoleArea').val(msg);
+		}
+
+		function startTime(key) {
+			timeMap.set(key, new Date().getTime());
+		}
+
+		function endTime(key) {
+			if (timeMap.get(key)) {
+				var time = new Date().getTime();
+				return time - timeMap.get(key);
+			} else {
+				warnLog(key + ' not started.');
+				return 0;
+			}
+		}
+
+		$.extend({
+			sprintf: function (format) {
+				for (var i = 1; i < arguments.length; i++) {
+					var reg = new RegExp('\\{' + (i - 1) + '\\}', 'g');
+					format = format.replace(reg, arguments[i]);
+				}
+				return format;
+			}
+		});
+
+		// 对Date的扩展，将 Date 转化为指定格式的String   
+		// 月(M)、日(d)、小时(H)、分(m)、秒(s)、季度(q) 可以用 1-2 个占位符，   
+		// 年(y)可以用 1-4 个占位符，毫秒(S)只能用 1 个占位符(是 1-3 位的数字)   
+		// 例子：   
+		// (new Date()).Format("yyyy-MM-dd HH:mm:ss.S") ==> 2006-07-02 08:09:04.423   
+		// (new Date()).Format("yyyy-M-d H:m:s.S")      ==> 2006-7-2 8:9:4.18   
+		Date.prototype.Format = function (fmt) { //author: meizz   
+			var o = {
+				"M+": this.getMonth() + 1,               //月份   
+				"d+": this.getDate(),                    //日   
+				"H+": this.getHours(),                   //小时   
+				"m+": this.getMinutes(),                 //分   
+				"s+": this.getSeconds(),                 //秒   
+				"q+": Math.floor((this.getMonth() + 3) / 3), //季度   
+				"S": this.getMilliseconds()             //毫秒   
+			};
+			if (/(y+)/.test(fmt))
+				fmt = fmt.replace(RegExp.$1, (this.getFullYear() + "").substr(4 - RegExp.$1.length));
+			for (var k in o)
+				if (new RegExp("(" + k + ")").test(fmt))
+					fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (("00" + o[k]).substr(("" + o[k]).length)));
+			return fmt;
+		}
+	</script>
+</head>
+
+<body>
+	<div style="margin: auto; width: 1050px;">
+		<div style="display: inline-block; width: 820px;">
+			<textarea id="parseArea" rows="10" style="width:800px"></textarea>
+		</div>
+		<div style="display: inline-block; width: 220px; vertical-align: top;">
+			<label>例：<br>
+				update_date,更新日期,String<br>
+				update_time,更新时间,String
+			</label>
+			<br />
+			<br />
+			<button id="tryBtn">试一下！</button>
+		</div>
+		<br />
+		<button id="parseBtn">解析字段</button>
+		<br />
+		<br />
+		<fieldset style="width: 771px;">
+			<legend>参数</legend>
+			<div>
+				<label style="width:158px;display:inline-block">字段</label>
+				<label style="width:158px;display:inline-block">字段名</label>
+				<label style="width:120px;display:inline-block">类型</label>
+			</div>
+			<div id="filedContents">
+				<div class="filedSet" style="height:28px">
+					<input type="text" class="filed" />
+					<input type="text" class="name" />
+					<select class="type">
+						<option>String</option>
+						<option>int</option>
+						<option>long</option>
+						<option>double</option>
+						<option>boolean</option>
+						<option>Integer</option>
+						<option>Long</option>
+						<option>Double</option>
+						<option>Boolean</option>
+						<option>BigDecimal</option>
+						<option>Date</option>
+					</select>
+					<button class="removeBtn">删除</button>
+				</div>
+			</div>
+			<button id="addBtn">追加字段</button>
+		</fieldset>
+		<div>
+			<br />
+			<fieldset style="width: 771px;">
+				<legend>设定</legend>
+				<label for="toCamelCkb">
+					<input id="toCamelCkb" type="checkbox" value="1">驼峰体转换
+				</label>
+				<label for="fWordDnCkb">
+					<input id="fWordDnCkb" type="checkbox" value="1">首字母变小写
+				</label>
+				<label for="commentLang">注释语言
+					<select id="commentLang">
+						<option value="zh">中文</option>
+						<option value="en">English</option>
+						<option value="jp">日本語</option>
+					</select>
+				</label>
+			</fieldset>
+			<br />
+			<fieldset style="width: 771px;">
+				<legend>操作</legend>
+				<button id="startBtn">开始生成</button>
+				<button id="cleanInputBtn">重置页面</button>
+				<button id="cleanOutputBtn">清空结果</button>
+			</fieldset>
+		</div>
+		<br />
+		<textarea id="outputArea" rows="40" style="width:800px"></textarea>
+		<br />
+		<br />
+		Console:<br />
+		<textarea id="consoleArea" rows="15" style="width:800px"></textarea>
+	</div>
+</body>
+
+</html>
